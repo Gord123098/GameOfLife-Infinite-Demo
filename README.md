@@ -2,6 +2,8 @@
 
 Interactive Infinite Game of Life with Custom Rules.
 
+**[Play the Live Demo](https://Gord123098.github.io/GameOfLife-Infinite-Demo/)**
+
 ## Features
 - Infinite Grid
 - Zoom & Pan
