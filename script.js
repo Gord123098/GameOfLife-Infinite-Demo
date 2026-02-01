@@ -157,9 +157,12 @@ class GameOfLife {
         }
         this.patternSelect.addEventListener('change', (e) => {
             if (e.target.value && window.PATTERNS[e.target.value]) {
-                this.loadPattern(window.PATTERNS[e.target.value]);
+                this.activePattern = window.PATTERNS[e.target.value];
+                this.canvas.style.cursor = "crosshair";
+            } else {
+                this.activePattern = null;
+                this.canvas.style.cursor = "default"; // or auto
             }
-            e.target.value = "";
         });
     }
 
@@ -300,10 +303,15 @@ class GameOfLife {
             return;
         }
 
-        this.isDrawing = true;
         const rect = this.canvas.getBoundingClientRect();
         const { x, y } = this.screenToGrid(e.clientX - rect.left, e.clientY - rect.top);
 
+        if (this.activePattern) {
+            this.stampPattern(this.activePattern, x, y);
+            return;
+        }
+
+        this.isDrawing = true;
         this.drawState = this.grid.getCell(x, y) ? 0 : 1;
         this.grid.setCell(x, y, this.drawState);
         this.draw();
@@ -359,13 +367,9 @@ class GameOfLife {
         }
     }
 
-    loadPattern(pattern) {
-        const rect = this.canvas.getBoundingClientRect();
-        // Place in center of screen
-        const { x, y } = this.screenToGrid(rect.width / 2, rect.height / 2);
-
-        const startX = x - Math.floor(pattern[0].length / 2);
-        const startY = y - Math.floor(pattern.length / 2);
+    stampPattern(pattern, cx, cy) {
+        const startX = cx - Math.floor(pattern[0].length / 2);
+        const startY = cy - Math.floor(pattern.length / 2);
 
         for (let py = 0; py < pattern.length; py++) {
             for (let px = 0; px < pattern[py].length; px++) {
