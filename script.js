@@ -307,6 +307,7 @@ class GameOfLife {
         const { x, y } = this.screenToGrid(e.clientX - rect.left, e.clientY - rect.top);
 
         if (this.activePattern) {
+            console.log("Stamping pattern:", this.activePattern);
             this.stampPattern(this.activePattern, x, y);
             return;
         }
