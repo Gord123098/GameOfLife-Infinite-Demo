@@ -424,20 +424,11 @@ class GameOfLife {
 
     computeNextGen() {
         const nextGrid = new ChunkManager(this.chunkSize);
-        // We need to check all cells that are "alive" + their neighbors.
-        // Efficient way:
-        // 1. Iterate all keys in current chunks.
-        // 2. Determine "Active Region" of chunks (chunks with active cells).
-        // 3. Process active chunks + 8 neighbors.
-
         const chunksToCheck = new Set();
 
+        // 1. Identify chunks that need processing
         for (const [key, chunk] of this.grid.chunks) {
-            // Only if chunk is not empty? Sparse optimization can go deeper (chunk has count).
-            // But checking every cell in chunk is fine.
             const [cx, cy] = key.split(',').map(Number);
-
-            // Add self and neighbors
             for (let dy = -1; dy <= 1; dy++) {
                 for (let dx = -1; dx <= 1; dx++) {
                     chunksToCheck.add(`${cx + dx},${cy + dy}`);
@@ -446,41 +437,85 @@ class GameOfLife {
         }
 
         let newPop = 0;
+        const CS = this.chunkSize;
 
-        // Process chunks
+        // 2. Process chunks
         for (const key of chunksToCheck) {
             const [cx, cy] = key.split(',').map(Number);
 
-            // We need to iterate every cell in this chunk and check neighbors
-            // Neighbors might come from other chunks.
-            const chunkBaseX = cx * this.chunkSize;
-            const chunkBaseY = cy * this.chunkSize;
+            // Pre-fetch 3x3 chunks
+            const c00 = this.grid.getChunk(cx - 1, cy - 1);
+            const c10 = this.grid.getChunk(cx, cy - 1);
+            const c20 = this.grid.getChunk(cx + 1, cy - 1);
+            const c01 = this.grid.getChunk(cx - 1, cy);
+            const c11 = this.grid.getChunk(cx, cy); // Center
+            const c21 = this.grid.getChunk(cx + 1, cy);
+            const c02 = this.grid.getChunk(cx - 1, cy + 1);
+            const c12 = this.grid.getChunk(cx, cy + 1);
+            const c22 = this.grid.getChunk(cx + 1, cy + 1);
 
-            let chunkHasLife = false;
+            // Optimization: If center is empty AND all neighbors are empty, skip?
+            // (We rely on activeChunks set so we know at least one neighbor IS alive usually, but this check is cheap)
+            if (!c00 && !c10 && !c20 && !c01 && !c11 && !c21 && !c02 && !c12 && !c22) continue;
 
-            for (let ly = 0; ly < this.chunkSize; ly++) {
-                for (let lx = 0; lx < this.chunkSize; lx++) {
+            const chunkBaseX = cx * CS;
+            const chunkBaseY = cy * CS;
+
+            // Helper for optimized lookup
+            const getVal = (lx, ly) => {
+                let chunk;
+                // Normalize logic to find correct neighbor chunk
+                if (lx >= 0 && lx < CS && ly >= 0 && ly < CS) chunk = c11;
+                else if (lx < 0 && ly >= 0 && ly < CS) chunk = c01;
+                else if (lx >= CS && ly >= 0 && ly < CS) chunk = c21;
+                else if (lx >= 0 && lx < CS && ly < 0) chunk = c10;
+                else if (lx >= 0 && lx < CS && ly >= CS) chunk = c12;
+                else if (lx < 0 && ly < 0) chunk = c00;
+                else if (lx >= CS && ly < 0) chunk = c20;
+                else if (lx < 0 && ly >= CS) chunk = c02;
+                else if (lx >= CS && ly >= CS) chunk = c22;
+
+                if (!chunk) return 0;
+
+                // Wrap coords for index
+                const rlx = ((lx % CS) + CS) % CS;
+                const rly = ((ly % CS) + CS) % CS;
+                return chunk[rly * CS + rlx];
+            };
+
+            for (let ly = 0; ly < CS; ly++) {
+                for (let lx = 0; lx < CS; lx++) {
                     const gx = chunkBaseX + lx;
                     const gy = chunkBaseY + ly;
-
                     let neighbors = 0;
 
-                    // Count neighbors
-                    // Check local neighborhood (-1 to 1)
-
-                    // Optimization: We are accessing getCell a lot. 
-                    // Can be optimized by caching current 3x3 chunks? 
-                    // For JS implementation, simple getCell is roughly OK but slowish.
-                    // Let's stick to getCell for correctness first (Coordinate hashing overhead).
-
-                    for (let dy = -1; dy <= 1; dy++) {
-                        for (let dx = -1; dx <= 1; dx++) {
-                            if (dx === 0 && dy === 0) continue;
-                            if (this.grid.getCell(gx + dx, gy + dy)) neighbors++;
-                        }
+                    // Optimization: Inner block (lx 1..30, ly 1..30) checks only c11 with no branches
+                    if (c11 && lx > 0 && lx < CS - 1 && ly > 0 && ly < CS - 1) {
+                        // Direct array access for speed
+                        const idx = ly * CS + lx;
+                        // Neighbors indices
+                        if (c11[idx - CS - 1]) neighbors++;
+                        if (c11[idx - CS]) neighbors++;
+                        if (c11[idx - CS + 1]) neighbors++;
+                        if (c11[idx - 1]) neighbors++;
+                        if (c11[idx + 1]) neighbors++;
+                        if (c11[idx + CS - 1]) neighbors++;
+                        if (c11[idx + CS]) neighbors++;
+                        if (c11[idx + CS + 1]) neighbors++;
+                    } else {
+                        // Edge cases or empty center chunk - use helper
+                        // Standard neighbor check with getVal
+                        if (getVal(lx - 1, ly - 1)) neighbors++;
+                        if (getVal(lx, ly - 1)) neighbors++;
+                        if (getVal(lx + 1, ly - 1)) neighbors++;
+                        if (getVal(lx - 1, ly)) neighbors++;
+                        if (getVal(lx + 1, ly)) neighbors++;
+                        if (getVal(lx - 1, ly + 1)) neighbors++;
+                        if (getVal(lx, ly + 1)) neighbors++;
+                        if (getVal(lx + 1, ly + 1)) neighbors++;
                     }
 
-                    const state = this.grid.getCell(gx, gy);
+                    const state = c11 ? c11[ly * CS + lx] : 0;
                     let nextState = 0;
 
                     if (state === 1) {
@@ -492,7 +527,6 @@ class GameOfLife {
                     if (nextState) {
                         nextGrid.setCell(gx, gy, 1);
                         newPop++;
-                        chunkHasLife = true;
                     }
                 }
             }
