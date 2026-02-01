@@ -404,15 +404,17 @@ class GameOfLife {
 
     randomize() {
         this.clear();
-        // Randomize fills a "View" sized area, or fixed area?
-        // Let's fill a 100x100 area at center
-        const size = 100;
         const density = parseFloat(this.densityRange.value);
 
-        for (let y = -size / 2; y < size / 2; y++) {
-            for (let x = -size / 2; x < size / 2; x++) {
+        // Randomize fills the visible screen bounds
+        const startGrid = this.screenToGrid(0, 0);
+        const endGrid = this.screenToGrid(this.canvas.width, this.canvas.height);
+
+        // Add padding to fill partially visible chunks perfectly
+        for (let y = startGrid.y - 1; y <= endGrid.y + 1; y++) {
+            for (let x = startGrid.x - 1; x <= endGrid.x + 1; x++) {
                 if (Math.random() < density) {
-                    this.grid.setCell(Math.floor(x), Math.floor(y), 1);
+                    this.grid.setCell(x, y, 1);
                 }
             }
         }
